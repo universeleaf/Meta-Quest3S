@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+meta/
 certs/
 controller_pose*.csv
 controller_pose*.jsonl

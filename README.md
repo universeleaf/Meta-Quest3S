@@ -32,8 +32,8 @@ selected SteamVR tracking universe, which defaults to the standing-room origin.
 ## Python setup
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+python -m venv meta
+.\meta\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 ```
 
@@ -41,6 +41,12 @@ python -m pip install -r requirements.txt
 
 ```powershell
 python steamvr_controller_pose.py
+```
+
+Without activating the environment first, run:
+
+```powershell
+.\meta\Scripts\python.exe steamvr_controller_pose.py
 ```
 
 Useful options:
