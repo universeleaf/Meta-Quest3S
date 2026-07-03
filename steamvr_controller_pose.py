@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import ctypes
 import json
 import math
 import sys
@@ -211,17 +212,20 @@ def list_devices(openvr: Any, vr_system: Any, universe: int) -> None:
 
 def matrix34_rows(matrix: Any) -> list[list[float]]:
     raw = getattr(matrix, "m", matrix)
-    rows: list[list[float]] = []
 
     try:
-        if len(raw) == 3 and all(hasattr(raw[i], "__iter__") for i in range(3)):
-            for row_index in range(3):
-                rows.append([float(raw[row_index][col]) for col in range(4)])
-            return rows
-    except Exception:
+        if len(raw) == 3:
+            return [
+                [float(raw[row_index][col]) for col in range(4)]
+                for row_index in range(3)
+            ]
+    except (IndexError, TypeError, ValueError):
         pass
 
-    flat = [float(item) for item in raw]
+    try:
+        flat = [float(item) for item in raw]
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Expected a 3x4 matrix-like object or 12 flat values.") from exc
     if len(flat) != 12:
         raise ValueError(f"Expected a 3x4 matrix or 12 flat values, got {len(flat)} values.")
     return [flat[0:4], flat[4:8], flat[8:12]]
@@ -380,6 +384,11 @@ def append_jsonl(path: Path, records: Iterable[ControllerPose]) -> None:
 
 def run_self_test() -> int:
     identity_rows = [[1, 0, 0, 0.1], [0, 1, 0, 0.2], [0, 0, 1, -0.3]]
+    ctypes_matrix = ((ctypes.c_float * 4) * 3)(
+        (1, 0, 0, 4),
+        (0, 1, 0, 5),
+        (0, 0, 1, 6),
+    )
     qx, qy, qz, qw = quaternion_from_rotation_matrix(identity_rows)
     roll, pitch, yaw = euler_from_quaternion(qx, qy, qz, qw)
 
@@ -392,6 +401,7 @@ def run_self_test() -> int:
         abs(pitch) < 1e-9,
         abs(yaw) < 1e-9,
         matrix34_rows([1, 0, 0, 1, 0, 1, 0, 2, 0, 0, 1, 3])[2][3] == 3.0,
+        matrix34_rows(ctypes_matrix)[1][3] == 5.0,
     ]
 
     if all(checks):
