@@ -130,6 +130,25 @@ def role_name(openvr: Any, role_value: int) -> str:
     return "unassigned"
 
 
+def controller_role(openvr: Any, vr_system: Any, device_index: int) -> str:
+    try:
+        role = role_name(openvr, vr_system.getControllerRoleForTrackedDeviceIndex(device_index))
+    except Exception:
+        role = "unassigned"
+
+    if role != "unassigned":
+        return role
+
+    model = get_string_property(openvr, vr_system, device_index, "Prop_ModelNumber_String")
+    serial = get_string_property(openvr, vr_system, device_index, "Prop_SerialNumber_String")
+    label = f"{model} {serial}".lower()
+    if "right" in label:
+        return "right"
+    if "left" in label:
+        return "left"
+    return "unassigned"
+
+
 def device_class_name(openvr: Any, class_value: int) -> str:
     known = {
         getattr(openvr, "TrackedDeviceClass_Invalid", None): "Invalid",
@@ -167,10 +186,7 @@ def controller_indices(openvr: Any, vr_system: Any, include_unassigned: bool) ->
         if device_class != controller_class:
             continue
 
-        try:
-            role = role_name(openvr, vr_system.getControllerRoleForTrackedDeviceIndex(index))
-        except Exception:
-            role = "unassigned"
+        role = controller_role(openvr, vr_system, index)
 
         if role in {"left", "right"}:
             indices.setdefault(role, index)
@@ -195,10 +211,7 @@ def list_devices(openvr: Any, vr_system: Any, universe: int) -> None:
             continue
 
         pose = poses[index]
-        try:
-            role = role_name(openvr, vr_system.getControllerRoleForTrackedDeviceIndex(index))
-        except Exception:
-            role = ""
+        role = controller_role(openvr, vr_system, index)
         model = get_string_property(openvr, vr_system, index, "Prop_ModelNumber_String")
         serial = get_string_property(openvr, vr_system, index, "Prop_SerialNumber_String")
         tracking = get_tracking_result_name(openvr, getattr(pose, "eTrackingResult", -1))
