@@ -56,6 +56,7 @@ python steamvr_controller_pose.py --rate 60
 python steamvr_controller_pose.py --csv controller_pose.csv
 python steamvr_controller_pose.py --jsonl controller_pose.jsonl
 python steamvr_controller_pose.py --once
+python steamvr_controller_pose.py --list-devices
 python steamvr_controller_pose.py --universe raw
 ```
 
@@ -78,7 +79,22 @@ If your experiment needs coordinates before room calibration, try
 
 - `ModuleNotFoundError: openvr`: run `python -m pip install -r requirements.txt`.
 - `VRInitError`: start SteamVR first and make sure Quest Link/Air Link is active.
+- SteamVR error `1114`, `OculusRuntimeBadInstall`, or `Unable to load LibOVRRT DLL`:
+  start SteamVR with Meta's runtime folder on `PATH`:
+
+  ```powershell
+  .\tools\start_steamvr_with_meta_runtime.ps1 -RestartSteamVR
+  ```
+
+  For a persistent fix, run PowerShell as Administrator and then run:
+
+  ```powershell
+  .\tools\fix_oculus_registry_admin.ps1
+  ```
+
 - Left or right controller is missing: wake the controller, check battery, and
   confirm SteamVR shows both controller icons.
+- To see exactly what SteamVR exposes to Python, run
+  `python steamvr_controller_pose.py --list-devices`.
 - Pose valid is `False`: the controller is connected but currently not tracked,
   often because it is outside camera view or asleep.

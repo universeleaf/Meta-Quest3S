@@ -6,5 +6,6 @@ meta/
 certs/
 controller_pose*.csv
 controller_pose*.jsonl
+openxr-runtime-backup.reg
 .DS_Store
 Thumbs.db

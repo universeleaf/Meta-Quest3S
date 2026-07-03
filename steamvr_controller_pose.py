@@ -73,6 +73,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run math/conversion checks without connecting to SteamVR.",
     )
+    parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="List all tracked devices that SteamVR currently exposes, then exit.",
+    )
     return parser.parse_args()
 
 
@@ -124,6 +129,18 @@ def role_name(openvr: Any, role_value: int) -> str:
     return "unassigned"
 
 
+def device_class_name(openvr: Any, class_value: int) -> str:
+    known = {
+        getattr(openvr, "TrackedDeviceClass_Invalid", None): "Invalid",
+        getattr(openvr, "TrackedDeviceClass_HMD", None): "HMD",
+        getattr(openvr, "TrackedDeviceClass_Controller", None): "Controller",
+        getattr(openvr, "TrackedDeviceClass_GenericTracker", None): "GenericTracker",
+        getattr(openvr, "TrackedDeviceClass_TrackingReference", None): "TrackingReference",
+        getattr(openvr, "TrackedDeviceClass_DisplayRedirect", None): "DisplayRedirect",
+    }
+    return known.get(class_value, str(class_value))
+
+
 def controller_indices(openvr: Any, vr_system: Any, include_unassigned: bool) -> dict[str, int]:
     indices: dict[str, int] = {}
 
@@ -160,6 +177,36 @@ def controller_indices(openvr: Any, vr_system: Any, include_unassigned: bool) ->
             indices.setdefault(f"unassigned-{index}", index)
 
     return indices
+
+
+def list_devices(openvr: Any, vr_system: Any, universe: int) -> None:
+    poses = vr_system.getDeviceToAbsoluteTrackingPose(
+        universe, 0, openvr.k_unMaxTrackedDeviceCount
+    )
+    print("idx class             role       connected valid tracking             model / serial")
+    print("-" * 96)
+    for index in range(int(getattr(openvr, "k_unMaxTrackedDeviceCount", 64))):
+        try:
+            device_class = vr_system.getTrackedDeviceClass(index)
+        except Exception:
+            continue
+        if device_class == getattr(openvr, "TrackedDeviceClass_Invalid", -1):
+            continue
+
+        pose = poses[index]
+        try:
+            role = role_name(openvr, vr_system.getControllerRoleForTrackedDeviceIndex(index))
+        except Exception:
+            role = ""
+        model = get_string_property(openvr, vr_system, index, "Prop_ModelNumber_String")
+        serial = get_string_property(openvr, vr_system, index, "Prop_SerialNumber_String")
+        tracking = get_tracking_result_name(openvr, getattr(pose, "eTrackingResult", -1))
+        print(
+            f"{index:>3} {device_class_name(openvr, device_class):<17} {role:<10} "
+            f"{str(bool(getattr(pose, 'bDeviceIsConnected', False))):<9} "
+            f"{str(bool(getattr(pose, 'bPoseIsValid', False))):<5} "
+            f"{tracking:<20} {model or 'unknown model'} / {serial or 'unknown serial'}"
+        )
 
 
 def matrix34_rows(matrix: Any) -> list[list[float]]:
@@ -374,6 +421,11 @@ def main() -> int:
 
     vr_system = openvr.VRSystem()
     universe = get_universe(openvr, args.universe)
+    if args.list_devices:
+        list_devices(openvr, vr_system, universe)
+        openvr.shutdown()
+        return 0
+
     interval = 1.0 / args.rate
     started_at = time.time()
 
