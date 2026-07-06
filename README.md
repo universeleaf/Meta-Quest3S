@@ -27,6 +27,10 @@ selected SteamVR tracking universe. The default is `standing`.
 - `run_controller_pose.py`: optional convenience launcher. It can find Meta
   Quest Link and SteamVR, add the Meta runtime folder to `PATH`, start SteamVR,
   and then run the pose reader.
+- `coinft.py`: CoinFT/camera dashboard from the lab, now with an embedded Quest
+  controller pose visualization panel.
+- `quest_controller_pose_panel.py`: reusable PyQtGraph/OpenVR panel used by
+  `coinft.py`.
 - `requirements.txt`: Python dependency list.
 
 ## Required Software
@@ -79,6 +83,37 @@ Start Quest Link / Air Link, enter SteamVR in the headset, then run:
 ```
 
 Stop the live stream with `Ctrl+C`.
+
+## Run the CoinFT Dashboard
+
+The integrated dashboard keeps the original LED, CoinFT, and camera panels and
+adds a Quest controller pose panel in the left-side empty space. Start Quest
+Link / Air Link and SteamVR first, then run:
+
+```powershell
+.\meta\Scripts\python.exe coinft.py
+```
+
+The new panel shows:
+
+- Position view: controller position in the SteamVR standing coordinate space.
+- Orientation view: controller local `x`, `y`, and `z` axes as colored arrows.
+- Numeric readouts: `x`, `y`, `z`, roll, pitch, and yaw.
+
+The lab hardware settings inside `coinft.py` are intentionally left in the
+original file. On a new Windows PC, update the serial ports and model folder in
+that file:
+
+```python
+LED_SERIAL_PORT = 'COM3'
+FT_SERIAL_PORT = 'COM4'
+FT_DATA_DIR = r'C:\path\to\pvft'
+```
+
+The CoinFT model files must exist in `FT_DATA_DIR`:
+
+- `PFT5-1_MLP_5L_norm_L2.onnx`
+- `PFT5-1_norm_constants.mat`
 
 ## Verify Devices First
 
@@ -188,9 +223,13 @@ find the Meta runtime.
 
 ## Coordinate Notes
 
-By default, the script uses `TrackingUniverseStanding`. In SteamVR/OpenVR, the
-pose is a 3x4 transform from device space to the tracking universe. Translation
-is measured in meters. The usual axes are:
+By default, the script and the CoinFT dashboard use
+`TrackingUniverseStanding`. In SteamVR/OpenVR, the pose is a 3x4 transform from
+device space to the current standing tracking universe. Translation is measured
+in meters. The origin is the calibrated PC VR tracking/play-area origin created
+by Quest Link/SteamVR, not a camera coordinate system and not a global room/GPS
+coordinate. Re-centering or reconfiguring the VR play area can change this
+reference frame. The usual axes are:
 
 - `+x`: right
 - `+y`: up

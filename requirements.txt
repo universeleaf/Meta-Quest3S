@@ -1,1 +1,9 @@
 openvr
+pyserial
+opencv-python
+numpy
+scipy
+onnxruntime
+pyqtgraph
+PyQt5
+PyOpenGL
