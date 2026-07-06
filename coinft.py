@@ -43,6 +43,8 @@ FT_NORM_FILE = 'PFT5-1_norm_constants.mat'
 # QUEST CONTROLLER POSE INTEGRATION
 # ==========================================
 INVALID_DEVICE_INDEX = 0xFFFFFFFF
+QUEST_POSE_RATE_HZ = 60.0
+QUEST_TRAJECTORY_SECONDS = 5.0
 QUEST_RED = (1.0, 0.08, 0.05, 1.0)
 QUEST_GREEN = (0.0, 0.75, 0.15, 1.0)
 QUEST_BLUE = (0.05, 0.25, 1.0, 1.0)
@@ -400,6 +402,7 @@ class QuestControllerPoseThread(QThread):
                 vr_system = openvr.VRSystem()
                 universe = quest_get_universe(openvr)
                 started_at = time.time()
+                last_status_at = 0.0
                 self.status_message.emit("OpenVR connected. Waiting for controllers...")
 
                 while self._run_flag:
@@ -412,10 +415,15 @@ class QuestControllerPoseThread(QThread):
                         for role, device_index in sorted(indices.items())
                     ]
                     self.records_updated.emit(records)
-                    if records:
-                        self.status_message.emit(f"Tracking {len(records)} controller(s).")
-                    else:
-                        self.status_message.emit("No controller yet. Wake controllers in SteamVR.")
+                    now = time.time()
+                    if now - last_status_at >= 0.5:
+                        if records:
+                            self.status_message.emit(
+                                f"Tracking {len(records)} controller(s), target {self.rate_hz:g} Hz."
+                            )
+                        else:
+                            self.status_message.emit("No controller yet. Wake controllers in SteamVR.")
+                        last_status_at = now
                     self.msleep(interval)
             except Exception as exc:
                 self.status_message.emit(
@@ -434,8 +442,9 @@ class QuestControllerPosePanel(QWidget):
         self._gl_available = gl is not None
         self._position_items = {}
         self._orientation_items = {}
+        self._trajectory_history = {}
 
-        self.pose_thread = QuestControllerPoseThread(rate_hz=30.0)
+        self.pose_thread = QuestControllerPoseThread(rate_hz=QUEST_POSE_RATE_HZ)
         self.init_ui()
         self.pose_thread.records_updated.connect(self.update_records)
         self.pose_thread.status_message.connect(self.update_status)
@@ -459,7 +468,9 @@ class QuestControllerPosePanel(QWidget):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
 
-        self.position_group = QGroupBox("Position in SteamVR standing space")
+        self.position_group = QGroupBox(
+            f"Position in SteamVR standing space, last {QUEST_TRAJECTORY_SECONDS:g}s trail"
+        )
         self.orientation_group = QGroupBox("Orientation axes")
         self.position_group.setLayout(QVBoxLayout())
         self.orientation_group.setLayout(QVBoxLayout())
@@ -487,7 +498,10 @@ class QuestControllerPosePanel(QWidget):
         grid.addWidget(self.orientation_group, 0, 1)
         layout.addLayout(grid, 1)
 
-        legend = QLabel("Axes: red=+X, green=+Y up, blue=+Z back. In SteamVR, forward is usually -Z.")
+        legend = QLabel(
+            f"Axes: red=+X, green=+Y up, blue=+Z back. "
+            f"Target sampling: {QUEST_POSE_RATE_HZ:g} Hz. Trail: {QUEST_TRAJECTORY_SECONDS:g} s."
+        )
         legend.setFont(QFont("Arial", 9))
         layout.addWidget(legend)
         self.setMinimumHeight(520)
@@ -539,9 +553,10 @@ class QuestControllerPosePanel(QWidget):
         if role in self._position_items:
             return self._position_items[role]
         marker = gl.GLScatterPlotItem(pos=np.zeros((1, 3)), color=self._role_color(role), size=13, pxMode=True)
+        trajectory = self._add_line(self.position_view, self._role_color(role), width=3)
         radial = self._add_line(self.position_view, self._role_color(role), width=2)
         self.position_view.addItem(marker)
-        self._position_items[role] = {"marker": marker, "radial": radial}
+        self._position_items[role] = {"marker": marker, "trajectory": trajectory, "radial": radial}
         return self._position_items[role]
 
     def _ensure_orientation_items(self, role: str):
@@ -581,6 +596,20 @@ class QuestControllerPosePanel(QWidget):
             point = quest_map_vr_to_gl((record.x, record.y, record.z))
             items["marker"].setData(pos=np.array([point]), color=self._role_color(record.role), size=13)
             self._set_line(items["radial"], origin, point)
+            self._update_trajectory_line(record.role, record.timestamp, point, items["trajectory"])
+
+    def _update_trajectory_line(self, role: str, timestamp: float, point: np.ndarray, line_item: Any):
+        history = self._trajectory_history.setdefault(role, [])
+        history.append((timestamp, point.copy()))
+
+        cutoff = timestamp - QUEST_TRAJECTORY_SECONDS
+        while history and history[0][0] < cutoff:
+            history.pop(0)
+
+        points = np.array([sample[1] for sample in history], dtype=float)
+        if len(points) == 1:
+            points = np.vstack([points[0], points[0]])
+        line_item.setData(pos=points)
 
     def _update_orientation_view(self, records):
         length = 0.35
