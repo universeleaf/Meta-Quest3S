@@ -1,37 +1,17 @@
-# Meta Quest 3S Controller Pose Monitor
+# Meta Quest 3S Controller Pose in CoinFT
 
-Python tools for reading the real-time 6DoF pose of Meta Quest 3S Touch
-controllers through SteamVR/OpenVR on a Windows PC.
+This repository contains a single Python dashboard, `coinft.py`, that combines
+the lab's original LED, CoinFT sensor, and vision panels with a live Meta Quest
+3S controller pose panel.
 
-The Python code runs on the PC, not inside the headset. The Quest must first be
-connected to the PC through Quest Link, Air Link, or another PC VR path that
-makes the headset and controllers visible in SteamVR.
+The code runs on the Windows PC. It does not run inside the headset. The Quest
+3S must be connected to the PC through Quest Link or Air Link, and SteamVR must
+show the headset and controllers before controller pose data can appear.
 
-## What This Reports
+## Files
 
-For each controller that SteamVR exposes:
-
-- Position: `x`, `y`, `z` in meters.
-- Orientation: quaternion `qx`, `qy`, `qz`, `qw`.
-- Euler angles: roll, pitch, yaw in degrees.
-- Linear velocity and angular velocity when SteamVR reports them.
-- Device index, model name, serial number, connection status, and tracking
-  validity.
-
-The position is not GPS or global room localization. It is relative to the
-selected SteamVR tracking universe. The default is `standing`.
-
-## Repository Files
-
-- `steamvr_controller_pose.py`: the main pose reader.
-- `run_controller_pose.py`: optional convenience launcher. It can find Meta
-  Quest Link and SteamVR, add the Meta runtime folder to `PATH`, start SteamVR,
-  and then run the pose reader.
-- `coinft.py`: CoinFT/camera dashboard from the lab, now with an embedded Quest
-  controller pose visualization panel.
-- `quest_controller_pose_panel.py`: reusable PyQtGraph/OpenVR panel used by
-  `coinft.py`.
-- `requirements.txt`: Python dependency list.
+- `coinft.py`: the full dashboard and all Quest controller pose code.
+- `requirements.txt`: Python dependencies.
 
 ## Required Software
 
@@ -46,63 +26,32 @@ In the Meta Quest Link desktop app:
 
 1. Open `Settings`.
 2. Enable `Unknown sources`.
-3. In the OpenXR Runtime section, make sure Meta Quest Link / Meta Horizon Link
-   is the active OpenXR runtime.
+3. In `OpenXR Runtime`, make sure Meta Quest Link / Meta Horizon Link is the
+   active runtime.
 
-## Hardware Setup
+## Install Python Dependencies
 
-1. Charge the controller batteries.
-2. Connect the Quest 3S to the PC with Quest Link USB-C or Air Link.
-3. Put on the headset and enter the PC VR / SteamVR environment.
-4. Make sure SteamVR shows the headset and the controller icons.
-5. Keep the controllers awake and visible to the headset cameras.
-
-If only one controller has battery, the script can still read the one available
-controller.
-
-## Quick Start
-
-Clone the repository:
+Clone the repository and install the dependencies into a local virtual
+environment:
 
 ```powershell
 git clone https://github.com/universeleaf/Meta-Quest3S.git
 cd Meta-Quest3S
-```
-
-Create and use a virtual environment:
-
-```powershell
 python -m venv meta
 .\meta\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Start Quest Link / Air Link, enter SteamVR in the headset, then run:
+If you already created the `meta` environment, only run the install command
+again:
 
 ```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --restart-steamvr --rate 60
+.\meta\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Stop the live stream with `Ctrl+C`.
+## Edit Local Hardware Paths
 
-## Run the CoinFT Dashboard
-
-The integrated dashboard keeps the original LED, CoinFT, and camera panels and
-adds a Quest controller pose panel in the left-side empty space. Start Quest
-Link / Air Link and SteamVR first, then run:
-
-```powershell
-.\meta\Scripts\python.exe coinft.py
-```
-
-The new panel shows:
-
-- Position view: controller position in the SteamVR standing coordinate space.
-- Orientation view: controller local `x`, `y`, and `z` axes as colored arrows.
-- Numeric readouts: `x`, `y`, `z`, roll, pitch, and yaw.
-
-The lab hardware settings inside `coinft.py` are intentionally left in the
-original file. On a new Windows PC, update the serial ports and model folder in
-that file:
+Before running on a new computer, open `coinft.py` and update the local serial
+ports and CoinFT model folder near the top of the file:
 
 ```python
 LED_SERIAL_PORT = 'COM3'
@@ -110,102 +59,87 @@ FT_SERIAL_PORT = 'COM4'
 FT_DATA_DIR = r'C:\path\to\pvft'
 ```
 
-The CoinFT model files must exist in `FT_DATA_DIR`:
+The CoinFT model files must exist inside `FT_DATA_DIR`:
 
 - `PFT5-1_MLP_5L_norm_L2.onnx`
 - `PFT5-1_norm_constants.mat`
 
-## Verify Devices First
+If you only want to test the Quest pose panel, the dashboard can still open
+when the LED or CoinFT serial devices are unavailable; those panels will simply
+show their disconnected/default state.
 
-Before recording data, it is useful to check what SteamVR exposes:
+## Start Quest Link and SteamVR
+
+1. Turn on the Quest 3S and wake the controllers.
+2. Connect the headset to the PC with Quest Link USB-C or Air Link.
+3. Inside the headset, enter the Quest Link / PC VR environment.
+4. Start SteamVR on the PC.
+5. Confirm the SteamVR status window shows the headset icon and controller
+   icons.
+
+If only one controller has battery, the dashboard can still display the one
+available controller.
+
+## Run the Dashboard
+
+From the repository folder:
 
 ```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --restart-steamvr --list-devices
+.\meta\Scripts\python.exe coinft.py
 ```
 
-A working setup should print something like:
+You can also open the folder in VS Code and run `coinft.py` with the Python
+interpreter set to:
 
 ```text
-idx class             role       connected valid tracking             model / serial
-------------------------------------------------------------------------------------------------
-  0 HMD               unassigned True      True  RunningOK            Meta Quest 3S / ...
-  1 Controller        right      True      True  RunningOK            Meta Quest 3S (Right Controller) / ...
+.\meta\Scripts\python.exe
 ```
 
-If the controller is missing, wake it with a button press, check the battery,
-and confirm that SteamVR shows the controller icon.
+## Quest Controller Pose Panel
 
-## Record Data
+`Part 5: Quest Controller Pose` fills the left-side dashboard space between the
+LED controls and the CoinFT sensor plots.
 
-Print live controller pose at 60 Hz:
+It displays:
 
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --rate 60
-```
+- Position view: each tracked controller position in SteamVR standing space.
+- Orientation view: each controller's local axes as arrows.
+- Numeric position: `x`, `y`, `z` in meters.
+- Numeric orientation: roll, pitch, yaw in degrees.
 
-Save to CSV:
+Color conventions:
 
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --rate 60 --csv controller_pose.csv
-```
+- Red axis: `+X`
+- Green axis: `+Y`
+- Blue axis: `+Z`
+- Cyan marker: left controller
+- Orange marker: right controller
 
-Save to JSON Lines:
+## Coordinate Frame
 
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --rate 60 --jsonl controller_pose.jsonl
-```
+The Quest controller poses come from SteamVR/OpenVR using
+`TrackingUniverseStanding`. The position is measured in meters relative to the
+current SteamVR standing/play-area origin created by Quest Link and SteamVR.
 
-Print one sample and exit:
+It is not GPS, not a world coordinate system, and not the camera coordinate
+system. Re-centering the headset or reconfiguring the VR play area can change
+the origin.
 
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --once
-```
+The raw SteamVR convention is usually:
 
-Run the core script directly if SteamVR is already working:
+- `+x`: right
+- `+y`: up
+- `-z`: forward
 
-```powershell
-.\meta\Scripts\python.exe steamvr_controller_pose.py --rate 60 --include-unassigned
-```
+The numeric readout uses the raw SteamVR coordinates. The 3D visualization maps
+them into a display-friendly view while keeping the same meaning.
 
-## If Your Install Paths Are Different
+## SteamVR Runtime Workaround
 
-The launcher tries to auto-detect common locations. If auto-detection fails,
-pass the paths manually.
-
-Meta Quest Link root examples:
-
-- `D:\Meta Horizon`
-- `C:\Program Files\Oculus`
-- `C:\Program Files\Meta Horizon`
-
-SteamVR root example:
-
-- `C:\Program Files (x86)\Steam\steamapps\common\SteamVR`
-
-Run with explicit paths:
-
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py `
-  --meta-root "D:\Meta Horizon" `
-  --steamvr-root "C:\Program Files (x86)\Steam\steamapps\common\SteamVR" `
-  --restart-steamvr `
-  --rate 60
-```
-
-If you do not want the launcher to start SteamVR:
-
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --no-start-steamvr --rate 60
-```
-
-## Manual SteamVR Runtime Workaround
-
-Some Meta Quest Link installations put the Oculus runtime under a custom folder
-such as `D:\Meta Horizon`. SteamVR may then show error `1114`,
-`OculusRuntimeBadInstall`, or `Unable to load LibOVRRT DLL`.
-
-If that happens, manually add the Meta runtime folder to `PATH` before starting
-SteamVR. Replace `D:\Meta Horizon` with your own Meta Quest Link install path:
+If SteamVR shows error `1114`, `OculusRuntimeBadInstall`, or cannot load the
+Oculus runtime DLL, add the Meta runtime folder to `PATH` before starting
+SteamVR. Replace `D:\Meta Horizon` with your actual Meta Quest Link install
+folder:
 
 ```powershell
 $env:PATH = "D:\Meta Horizon\Support\oculus-runtime;$env:PATH"
@@ -215,43 +149,22 @@ $env:PATH = "D:\Meta Horizon\Support\oculus-runtime;$env:PATH"
 Then run:
 
 ```powershell
-.\meta\Scripts\python.exe steamvr_controller_pose.py --rate 60 --include-unassigned
+.\meta\Scripts\python.exe coinft.py
 ```
 
-The convenience launcher does the same `PATH` setup automatically when it can
-find the Meta runtime.
-
-## Coordinate Notes
-
-By default, the script and the CoinFT dashboard use
-`TrackingUniverseStanding`. In SteamVR/OpenVR, the pose is a 3x4 transform from
-device space to the current standing tracking universe. Translation is measured
-in meters. The origin is the calibrated PC VR tracking/play-area origin created
-by Quest Link/SteamVR, not a camera coordinate system and not a global room/GPS
-coordinate. Re-centering or reconfiguring the VR play area can change this
-reference frame. The usual axes are:
-
-- `+x`: right
-- `+y`: up
-- `-z`: forward
-
-Use `--universe raw` for raw tracking coordinates or `--universe seated` for
-seated coordinates:
-
-```powershell
-.\meta\Scripts\python.exe run_controller_pose.py --universe raw --rate 60
-```
+`coinft.py` also tries to auto-detect the Meta runtime folder before connecting
+to OpenVR, but the manual step above is useful when SteamVR itself fails before
+Python starts.
 
 ## Troubleshooting
 
-- `ModuleNotFoundError: openvr`: run
+- `ModuleNotFoundError`: run
   `.\meta\Scripts\python.exe -m pip install -r requirements.txt`.
-- `VRInitError`: start Quest Link / Air Link, enter SteamVR in the headset, and
-  rerun the command.
-- SteamVR error `1114` or `Unable to load LibOVRRT DLL`: run
-  `run_controller_pose.py` with `--restart-steamvr`, or use the manual `PATH`
-  workaround above.
-- No controllers are listed: wake the controllers, check batteries, and confirm
-  SteamVR shows the controller icons.
-- `pose_valid` is `False`: the controller is connected but not currently tracked,
-  often because it is outside camera view or asleep.
+- `OpenVR not ready`: enter Quest Link / PC VR in the headset, start SteamVR,
+  and confirm SteamVR shows the headset.
+- No controller pose: wake the controllers, check batteries, and keep them
+  visible to the headset cameras.
+- SteamVR says no headset detected: restart Quest Link, reconnect the USB-C
+  cable or Air Link session, then restart SteamVR.
+- Pose appears frozen or invalid: move the controller into the headset camera
+  view and press a controller button to wake it.
