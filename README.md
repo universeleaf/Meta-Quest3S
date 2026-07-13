@@ -103,7 +103,9 @@ LED controls and the CoinFT sensor plots.
 It displays:
 
 - Position view: each tracked controller position in SteamVR standing space.
-- Position trail: each controller's recent location trajectory.
+- Position trail: each controller's full-session location trajectory.
+- Endpoint pose axes: each controller's live orientation drawn at the current
+  endpoint in the Position view.
 - Orientation view: each controller's local axes as arrows.
 - Numeric position: `x`, `y`, `z` in meters.
 - Numeric orientation: roll, pitch, yaw in degrees.
@@ -120,13 +122,17 @@ Default pose settings are near the top of `coinft.py`:
 
 ```python
 QUEST_POSE_RATE_HZ = 60.0
-QUEST_TRAJECTORY_SECONDS = 5.0
+QUEST_TRAJECTORY_SECONDS = None
+QUEST_POSITION_POSE_AXIS_LENGTH = 0.18
 ```
 
-Change `QUEST_TRAJECTORY_SECONDS` to keep a longer or shorter location trail in
-the Position view. Change `QUEST_POSE_RATE_HZ` to adjust the target OpenVR
-sampling frequency. The default target is 60 Hz; the actual visible update rate
-can still depend on SteamVR tracking, PC performance, and PyQt rendering load.
+Keep `QUEST_TRAJECTORY_SECONDS = None` to keep the full trajectory for the
+whole run. Set it to a number such as `5.0` or `10.0` if you want the Position
+view to show only the most recent seconds. Change
+`QUEST_POSITION_POSE_AXIS_LENGTH` to make the endpoint pose axes shorter or
+longer. Change `QUEST_POSE_RATE_HZ` to adjust the target OpenVR sampling
+frequency. The default target is 60 Hz; the actual visible update rate can
+still depend on SteamVR tracking, PC performance, and PyQt rendering load.
 
 ## Coordinate Frame
 

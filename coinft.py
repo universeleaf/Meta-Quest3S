@@ -44,7 +44,9 @@ FT_NORM_FILE = 'PFT5-1_norm_constants.mat'
 # ==========================================
 INVALID_DEVICE_INDEX = 0xFFFFFFFF
 QUEST_POSE_RATE_HZ = 60.0
-QUEST_TRAJECTORY_SECONDS = 5.0
+# Set to None to keep the full trajectory for the whole run.
+QUEST_TRAJECTORY_SECONDS = None
+QUEST_POSITION_POSE_AXIS_LENGTH = 0.18
 QUEST_RED = (1.0, 0.08, 0.05, 1.0)
 QUEST_GREEN = (0.0, 0.75, 0.15, 1.0)
 QUEST_BLUE = (0.05, 0.25, 1.0, 1.0)
@@ -366,6 +368,12 @@ def quest_quaternion_to_axes(
     )
 
 
+def quest_trajectory_label() -> str:
+    if QUEST_TRAJECTORY_SECONDS is None:
+        return "full-session trail"
+    return f"last {QUEST_TRAJECTORY_SECONDS:g}s trail"
+
+
 class QuestControllerPoseThread(QThread):
     records_updated = pyqtSignal(object)
     status_message = pyqtSignal(str)
@@ -469,7 +477,7 @@ class QuestControllerPosePanel(QWidget):
         grid.setColumnStretch(1, 1)
 
         self.position_group = QGroupBox(
-            f"Position in SteamVR standing space, last {QUEST_TRAJECTORY_SECONDS:g}s trail"
+            f"Position in SteamVR standing space, {quest_trajectory_label()}"
         )
         self.orientation_group = QGroupBox("Orientation axes")
         self.position_group.setLayout(QVBoxLayout())
@@ -500,7 +508,8 @@ class QuestControllerPosePanel(QWidget):
 
         legend = QLabel(
             f"Axes: red=+X, green=+Y up, blue=+Z back. "
-            f"Target sampling: {QUEST_POSE_RATE_HZ:g} Hz. Trail: {QUEST_TRAJECTORY_SECONDS:g} s."
+            f"Endpoint pose axes are drawn in the Position view. "
+            f"Target sampling: {QUEST_POSE_RATE_HZ:g} Hz. Trail: {quest_trajectory_label()}."
         )
         legend.setFont(QFont("Arial", 9))
         layout.addWidget(legend)
@@ -556,7 +565,14 @@ class QuestControllerPosePanel(QWidget):
         trajectory = self._add_line(self.position_view, self._role_color(role), width=3)
         radial = self._add_line(self.position_view, self._role_color(role), width=2)
         self.position_view.addItem(marker)
-        self._position_items[role] = {"marker": marker, "trajectory": trajectory, "radial": radial}
+        self._position_items[role] = {
+            "marker": marker,
+            "trajectory": trajectory,
+            "radial": radial,
+            "pose_x": self._add_line(self.position_view, QUEST_RED, width=4),
+            "pose_y": self._add_line(self.position_view, QUEST_GREEN, width=4),
+            "pose_z": self._add_line(self.position_view, QUEST_BLUE, width=4),
+        }
         return self._position_items[role]
 
     def _ensure_orientation_items(self, role: str):
@@ -597,19 +613,27 @@ class QuestControllerPosePanel(QWidget):
             items["marker"].setData(pos=np.array([point]), color=self._role_color(record.role), size=13)
             self._set_line(items["radial"], origin, point)
             self._update_trajectory_line(record.role, record.timestamp, point, items["trajectory"])
+            self._update_endpoint_pose_axes(record, point, items)
 
     def _update_trajectory_line(self, role: str, timestamp: float, point: np.ndarray, line_item: Any):
         history = self._trajectory_history.setdefault(role, [])
         history.append((timestamp, point.copy()))
 
-        cutoff = timestamp - QUEST_TRAJECTORY_SECONDS
-        while history and history[0][0] < cutoff:
-            history.pop(0)
+        if QUEST_TRAJECTORY_SECONDS is not None:
+            cutoff = timestamp - QUEST_TRAJECTORY_SECONDS
+            while history and history[0][0] < cutoff:
+                history.pop(0)
 
         points = np.array([sample[1] for sample in history], dtype=float)
         if len(points) == 1:
             points = np.vstack([points[0], points[0]])
         line_item.setData(pos=points)
+
+    def _update_endpoint_pose_axes(self, record: QuestControllerPoseRecord, point: np.ndarray, items: dict[str, Any]):
+        axes = quest_quaternion_to_axes(record.qx, record.qy, record.qz, record.qw)
+        for axis_name, axis_vector in zip(("pose_x", "pose_y", "pose_z"), axes):
+            end = point + QUEST_POSITION_POSE_AXIS_LENGTH * quest_map_vr_to_gl(axis_vector)
+            self._set_line(items[axis_name], point, end)
 
     def _update_orientation_view(self, records):
         length = 0.35
