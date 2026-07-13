@@ -449,8 +449,11 @@ class QuestControllerPosePanel(QWidget):
         super().__init__()
         self._gl_available = gl is not None
         self._position_items = {}
-        self._orientation_items = {}
         self._trajectory_history = {}
+        self.is_recording = False
+        self.pose_csv_file = None
+        self.pose_csv_writer = None
+        self.pose_recording_path = None
 
         self.pose_thread = QuestControllerPoseThread(rate_hz=QUEST_POSE_RATE_HZ)
         self.init_ui()
@@ -479,31 +482,24 @@ class QuestControllerPosePanel(QWidget):
         self.position_group = QGroupBox(
             f"Position in SteamVR standing space, {quest_trajectory_label()}"
         )
-        self.orientation_group = QGroupBox("Orientation axes")
         self.position_group.setLayout(QVBoxLayout())
-        self.orientation_group.setLayout(QVBoxLayout())
+        self.robot_pose_placeholder = QWidget()
+        self.robot_pose_placeholder.setMinimumHeight(390)
 
         if self._gl_available:
             self.position_view = self._create_view(distance=3.0)
-            self.orientation_view = self._create_view(distance=2.0)
             self.position_group.layout().addWidget(self.position_view, 1)
-            self.orientation_group.layout().addWidget(self.orientation_view, 1)
             self._add_world_axes(self.position_view, length=0.75)
-            self._add_world_axes(self.orientation_view, length=0.45)
         else:
             self.position_group.layout().addWidget(QLabel("3D view unavailable: install PyOpenGL."))
-            self.orientation_group.layout().addWidget(QLabel("3D view unavailable: install PyOpenGL."))
 
         self.position_readout = QLabel("Position: waiting for controller data...")
-        self.orientation_readout = QLabel("Orientation: waiting for controller data...")
-        for label in (self.position_readout, self.orientation_readout):
-            label.setFont(QFont("Consolas", 9))
-            label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.position_readout.setFont(QFont("Consolas", 9))
+        self.position_readout.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
         self.position_group.layout().addWidget(self.position_readout)
-        self.orientation_group.layout().addWidget(self.orientation_readout)
         grid.addWidget(self.position_group, 0, 0)
-        grid.addWidget(self.orientation_group, 0, 1)
+        grid.addWidget(self.robot_pose_placeholder, 0, 1)
         layout.addLayout(grid, 1)
 
         legend = QLabel(
@@ -551,13 +547,6 @@ class QuestControllerPosePanel(QWidget):
             return QUEST_RIGHT_COLOR
         return QUEST_UNKNOWN_COLOR
 
-    def _orientation_origin(self, role: str) -> np.ndarray:
-        if role == "left":
-            return np.array([-0.55, 0.0, 0.0], dtype=float)
-        if role == "right":
-            return np.array([0.55, 0.0, 0.0], dtype=float)
-        return np.zeros(3, dtype=float)
-
     def _ensure_position_items(self, role: str):
         if role in self._position_items:
             return self._position_items[role]
@@ -575,19 +564,6 @@ class QuestControllerPosePanel(QWidget):
         }
         return self._position_items[role]
 
-    def _ensure_orientation_items(self, role: str):
-        if role in self._orientation_items:
-            return self._orientation_items[role]
-        marker = gl.GLScatterPlotItem(pos=np.zeros((1, 3)), color=self._role_color(role), size=10, pxMode=True)
-        self.orientation_view.addItem(marker)
-        self._orientation_items[role] = {
-            "marker": marker,
-            "x": self._add_line(self.orientation_view, QUEST_RED, width=4),
-            "y": self._add_line(self.orientation_view, QUEST_GREEN, width=4),
-            "z": self._add_line(self.orientation_view, QUEST_BLUE, width=4),
-        }
-        return self._orientation_items[role]
-
     @pyqtSlot(str)
     def update_status(self, message: str):
         self.status_label.setText(f"Status: {message}")
@@ -602,8 +578,8 @@ class QuestControllerPosePanel(QWidget):
 
         if self._gl_available:
             self._update_position_view(valid_records)
-            self._update_orientation_view(valid_records)
         self._update_readouts(valid_records)
+        self._record_pose_rows(valid_records)
 
     def _update_position_view(self, records):
         origin = np.zeros(3, dtype=float)
@@ -635,39 +611,60 @@ class QuestControllerPosePanel(QWidget):
             end = point + QUEST_POSITION_POSE_AXIS_LENGTH * quest_map_vr_to_gl(axis_vector)
             self._set_line(items[axis_name], point, end)
 
-    def _update_orientation_view(self, records):
-        length = 0.35
-        for record in records:
-            items = self._ensure_orientation_items(record.role)
-            origin = self._orientation_origin(record.role)
-            items["marker"].setData(pos=np.array([origin]), color=self._role_color(record.role), size=10)
-
-            axes = quest_quaternion_to_axes(record.qx, record.qy, record.qz, record.qw)
-            for axis_name, axis_vector in zip(("x", "y", "z"), axes):
-                end = origin + length * quest_map_vr_to_gl(axis_vector)
-                self._set_line(items[axis_name], origin, end)
-
     def _update_readouts(self, records):
         if not records:
             self.position_readout.setText("Position: no valid controller pose.")
-            self.orientation_readout.setText("Orientation: no valid controller pose.")
             return
 
-        position_lines = []
-        orientation_lines = []
+        readout_lines = []
         for record in records:
-            position_lines.append(
-                f"{record.role:<10} x={record.x: .3f} m  y={record.y: .3f} m  z={record.z: .3f} m"
-            )
-            orientation_lines.append(
-                f"{record.role:<10} roll={record.roll_deg: .1f}  "
+            readout_lines.append(
+                f"{record.role:<10} x={record.x: .3f} m  y={record.y: .3f} m  z={record.z: .3f} m  "
+                f"roll={record.roll_deg: .1f}  "
                 f"pitch={record.pitch_deg: .1f}  yaw={record.yaw_deg: .1f}"
             )
 
-        self.position_readout.setText("\n".join(position_lines))
-        self.orientation_readout.setText("\n".join(orientation_lines))
+        self.position_readout.setText("\n".join(readout_lines))
+
+    @pyqtSlot(bool)
+    def toggle_recording(self, state: bool):
+        if state:
+            os.makedirs("recordings", exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.pose_recording_path = f"recordings/controller_trajectory_{timestamp}.csv"
+            self.pose_csv_file = open(self.pose_recording_path, "w", newline="")
+            self.pose_csv_writer = csv.writer(self.pose_csv_file)
+            self.pose_csv_writer.writerow(["timestamp", "elapsed", "role", "device_index", "x_m", "y_m", "z_m"])
+            self.is_recording = True
+        else:
+            self.is_recording = False
+            self._close_pose_recording()
+
+    def _record_pose_rows(self, records):
+        if not self.is_recording or self.pose_csv_writer is None:
+            return
+
+        for record in records:
+            self.pose_csv_writer.writerow([
+                f"{record.timestamp:.6f}",
+                f"{record.elapsed:.6f}",
+                record.role,
+                record.device_index,
+                f"{record.x:.6f}",
+                f"{record.y:.6f}",
+                f"{record.z:.6f}",
+            ])
+        if self.pose_csv_file is not None:
+            self.pose_csv_file.flush()
+
+    def _close_pose_recording(self):
+        if self.pose_csv_file is not None:
+            self.pose_csv_file.close()
+        self.pose_csv_file = None
+        self.pose_csv_writer = None
 
     def closeEvent(self, event):
+        self._close_pose_recording()
         self.pose_thread.stop()
         event.accept()
 
@@ -1245,6 +1242,7 @@ class MainApp(QWidget):
         
         self.camera_panel.req_capture.connect(self.ft_panel.ft_thread.capture_single_frame)
         self.camera_panel.req_record.connect(self.ft_panel.ft_thread.toggle_recording)
+        self.camera_panel.req_record.connect(self.quest_pose_panel.toggle_recording)
 
         self.led_panel.setMaximumHeight(240)
         left_layout.setSpacing(8)

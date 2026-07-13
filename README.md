@@ -106,7 +106,7 @@ It displays:
 - Position trail: each controller's full-session location trajectory.
 - Endpoint pose axes: each controller's live orientation drawn at the current
   endpoint in the Position view.
-- Orientation view: each controller's local axes as arrows.
+- Reserved right-side area: empty space for a future robot-arm pose view.
 - Numeric position: `x`, `y`, `z` in meters.
 - Numeric orientation: roll, pitch, yaw in degrees.
 
@@ -133,6 +133,25 @@ view to show only the most recent seconds. Change
 longer. Change `QUEST_POSE_RATE_HZ` to adjust the target OpenVR sampling
 frequency. The default target is 60 Hz; the actual visible update rate can
 still depend on SteamVR tracking, PC performance, and PyQt rendering load.
+
+## Controller Trajectory Recording
+
+The dashboard uses the existing `Start Recording` button for synchronized data
+collection. When recording is active, `coinft.py` saves Quest controller
+trajectory samples to:
+
+```text
+recordings/controller_trajectory_YYYYMMDD_HHMMSS.csv
+```
+
+Each row contains:
+
+```text
+timestamp, elapsed, role, device_index, x_m, y_m, z_m
+```
+
+The `x_m`, `y_m`, and `z_m` columns are the raw SteamVR/OpenVR controller
+position in meters. Press `Stop Recording` to close the CSV file.
 
 ## Coordinate Frame
 
