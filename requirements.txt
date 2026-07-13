@@ -1,4 +1,4 @@
-openvr
+# Shared dashboard dependencies
 pyserial
 opencv-python
 numpy
@@ -7,3 +7,6 @@ onnxruntime
 pyqtgraph
 PyQt5
 PyOpenGL
+
+# Required by coinft.py (Windows SteamVR/OpenVR mode)
+openvr; platform_system == "Windows"
